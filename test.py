@@ -13,6 +13,12 @@ number=['0','1','2','3','4','5','6','7','8','9']
 
 
 def random_captcha_text(char_set=number,captcha_size=4):
+    """
+    生成随机字符串
+    :param char_set:字符集
+    :param captcha_size:字符串长度
+    :return:随机字符串
+    """
     captcha_text=[]
     for i in range(captcha_size):
         c=random.choice(char_set)
@@ -21,6 +27,10 @@ def random_captcha_text(char_set=number,captcha_size=4):
 
 
 def gen_captcha_text_image():
+    """
+    生成一张随机验证码，极其对应数字的字符串
+    :return:随机验证码，对应数字的字符串
+    """
     image=ImageCaptcha(font_sizes=(56, 57))
     captcha_text=random_captcha_text()
     captcha_text=''.join(captcha_text)
@@ -29,10 +39,17 @@ def gen_captcha_text_image():
     return captcha_text,captcha_image
 
 
-def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha=4, char_set_len=10):
+def get_batch(batch_size=128, image_height=60, image_width=160):
+    """
+    获取一个batch的数据：batch长度的验证码集合，以及对应的数字标签集合
+    :param batch_size: batch大小，数据集大小
+    :param image_height:图片高度
+    :param image_width:图片宽度
+    :return:batch长度的验证码集合，对应的数字标签集合，用时
+    """
     st = time.clock()
-    batch_x=np.zeros([batch_size,image_height,image_width,3])
-    batch_y=np.zeros([batch_size,4])
+    batch_image=np.zeros([batch_size,image_height,image_width,3])
+    batch_label=np.zeros([batch_size,4])
     def wrap_gen_captcha_text_and_image():
         while True:
             text, image = gen_captcha_text_image()
@@ -43,13 +60,18 @@ def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha
 
     for i in range(batch_size):
         text, image = wrap_gen_captcha_text_and_image()
-        batch_x[i, :] = image
-        batch_y[i, :] = list(text)
+        batch_image[i, :] = image
+        batch_label[i, :] = list(text)
     ed = time.clock()
-    return np.uint8(batch_x), batch_y, ed - st
+    return np.uint8(batch_image), batch_label, ed - st
 
 
 def show_image(image, grey=False):
+    """
+    显示图片
+    :param image:要显示的图片
+    :param grey:是否要显示为灰度图
+    """
     if grey:
         plt.imshow(image, cmap='gray')
     else:
@@ -58,6 +80,12 @@ def show_image(image, grey=False):
 
 
 def convert_grey(image, flag_show=False):
+    """
+    将图片灰度化
+    :param image:需要灰度化的图片
+    :param flag_show:是否将处理结果显示出来
+    :return:
+    """
     # 灰度化
     iimage = Image.fromarray(np.uint8(image))
     # 锐化，很重要，强化边界，使得噪点更容易去除
@@ -70,36 +98,49 @@ def convert_grey(image, flag_show=False):
     return image
 
 
-def pixel_chek(image, pi, pj, chek):
+def pixel_chek(image, py, px, chek):
+    """
+    图片中一个像素点的检查，如果输入的像素点坐标不存在，直接返回False
+    :param image:图片
+    :param py:像素点坐标y
+    :param px:像素点坐标x
+    :param chek:检查函数
+    :return:检查结果
+    """
     width, height = image.shape
-    if pi < 0 or pi >= width:
+    if py < 0 or py >= width:
         return False
-    if pj < 0 or pj >= height:
+    if px < 0 or px >= height:
         return False
-    return chek(image[pi, pj])
+    return chek(image[py, px])
 
 
-def pixel_around_check(image, pi, pj, check):
+def pixel_around_check(image, py, px, check):
+    """
+    对一个像素点周围的像素点进行检查
+    :param image:图片
+    :param py:像素点坐标y
+    :param px:像素点坐标x
+    :param check:检查函数
+    :return:通过检查的像素点的个数
+    """
     count = 0
     for i_shift in [-1, 0, 1]:
         for j_shift in [-1, 0, 1]:
             if i_shift == 0 and j_shift == 0:
                 continue
-            if pixel_chek(image, pi + i_shift, pj + j_shift, check):
+            if pixel_chek(image, py + i_shift, px + j_shift, check):
                 count += 1
     return count
 
 
-def get_pixel_around(image, pi, pj):
-    window = []
-    for i_shift in [-1, 0, 1]:
-        for j_shift in [-1, 0, 1]:
-            if pixel_chek(image, pi + i_shift, pj + j_shift, lambda pix: True):
-                window.append(image[pi + i_shift, pj + j_shift])
-    return window
-
-
 def convert_bin(image, flag_show=False):
+    """
+    将图片二值化
+    :param image:图片
+    :param flag_show:是否显示处理结果
+    :return:二值化后的图片
+    """
     width, height = image.shape
     old_threshold = 0
     new_threshold = 220
@@ -129,7 +170,12 @@ def convert_bin(image, flag_show=False):
 
 
 def depoint(image, flag_show=False):
-    """传入二值化后的图片进行降噪"""
+    """
+    对图片进行降噪
+    :param image:图片
+    :param flag_show:是否显示处理结果
+    :return:降噪后的图片
+    """
     h, w = image.shape
     new_image = np.zeros((w,h))
     for i in range(w):
@@ -144,15 +190,12 @@ def depoint(image, flag_show=False):
     return image
 
 
-def new_try(image):
-    iimage = Image.fromarray(image)
-    iimage = ImageEnhance.Sharpness(iimage).enhance(4)
-    image = np.array(iimage)
-    return image
-
-
 def vertical_cut(image):
-    """传入二值化后的图片进行垂直投影"""
+    """
+    找到图片中字符的垂直切割线
+    :param image:图片
+    :return:每个字符的左右边界集合
+    """
     h,w = image.shape
     # print(h, w)
     ver_list = []
@@ -181,6 +224,13 @@ def vertical_cut(image):
 
 
 def do_vertical_split(image, cut, flag_show=False):
+    """
+    按照传入的切割边界集合对图片进行切割
+    :param image:图片
+    :param cut:切割边界结合
+    :param flag_show:是否显示处理后的结构
+    :return:切割后的字符图片集合
+    """
     split_image = []
     for (l,r) in cut:
         split_image.append(image[:, l:r])
@@ -190,6 +240,11 @@ def do_vertical_split(image, cut, flag_show=False):
 
 
 def remove_point(cut):
+    """
+    通过宽度判断每一对切割边界框住的是否是字符，并排除非字符的切割边界
+    :param cut:切割边界集合
+    :return:字符切割边界集合
+    """
     i = 0
     while i < len(cut):
         (left, right) = cut[i]
@@ -201,6 +256,12 @@ def remove_point(cut):
 
 
 def image_preprocess(image, flag_show=False):
+    """
+    对一张图片进行预处理
+    :param image:输入的原始图片
+    :param flag_show:是否展示每一步的处理结果
+    :return:预处理后的字符图片集合，是否预处理成功
+    """
     if flag_show:
         show_image(image)
     # 转灰度图
@@ -226,23 +287,43 @@ def image_preprocess(image, flag_show=False):
 
 
 def train_svm(images, labels, decision='ovr'):
+    """
+    训练SVM模型
+    :param images:图片集
+    :param labels:标签集
+    :param decision:ovr模式或ovo模式
+    :return:模型，用时
+    """
     st = time.clock()
-    clf = svm.SVC(decision_function_shape=decision, gamma='auto')
-    clf.fit(np.int8(images), np.int8(labels))
+    svm_model = svm.SVC(decision_function_shape=decision, gamma='auto')
+    svm_model.fit(np.int8(images), np.int8(labels))
     et = time.clock()
-    return clf, et - st
+    return svm_model, et - st
 
 
-def test_svm(clf, images, labels):
+def test_svm(svm_model, images, labels):
+    """
+    使用训练好的SVM，对图片进行识别
+    :param svm_model:模型
+    :param images:待识别的图片集
+    :param labels:对应的标签集
+    :return:正确率，对错向量，用时
+    """
     st = time.clock()
-    pre_result = clf.predict(np.uint8(images))
+    pre_result = svm_model.predict(np.uint8(images))
     et = time.clock()
-    correct = np.equal(labels, pre_result)
-    correct_rate = np.mean(correct)
-    return correct_rate, correct, et - st
+    correct_vector = np.equal(labels, pre_result)
+    correct_rate = np.mean(correct_vector)
+    return correct_rate, correct_vector, et - st
 
 
-def data_set_preprocess(captcha_image_set, train_captcha_label_set):
+def data_set_preprocess(captcha_image_set, captcha_label_set):
+    """
+    数据集预处理
+    :param captcha_image_set:验证码图片集合
+    :param captcha_label_set:验证码标签集合
+    :return:对验证码划分后得到的字符图片集合，字符标签集合
+    """
     st = time.clock()
     character_image_set = []
     character_label_set = []
@@ -251,7 +332,7 @@ def data_set_preprocess(captcha_image_set, train_captcha_label_set):
         char_image_set, error_flag = image_preprocess(captcha_image)
         if error_flag == False:
             character_image_set.extend(char_image_set)
-            character_label_set.extend(train_captcha_label_set[i])
+            character_label_set.extend(captcha_label_set[i])
         else:
             pre_error_count += 1
     # print("!!!!!!!!!!!!!!!!!pre_error_count: ", pre_error_count)
@@ -261,6 +342,12 @@ def data_set_preprocess(captcha_image_set, train_captcha_label_set):
 
 
 def get_feature_vector(char_img_set, uniform_width=20):
+    """
+    获取字符图片的特征向量
+    :param char_img_set:字符图片集合
+    :param uniform_width:归一化宽度
+    :return:特征向量集合，用时
+    """
     st = time.clock()
     vector_set = []
     for char_img in char_img_set:
@@ -286,6 +373,12 @@ def get_feature_vector(char_img_set, uniform_width=20):
 
 
 def train_process(captcha_image_set, captcha_label_set):
+    """
+    训练过程
+    :param captcha_image_set:验证吗图片集合
+    :param captcha_label_set:验证吗标签集合
+    :return:模型，总正确率，总用时
+    """
     st = time.clock()
 
     # 图像预处理
@@ -320,6 +413,13 @@ def train_process(captcha_image_set, captcha_label_set):
 
 
 def test_process(captcha_image_set, captcha_label_set, svm_model=None):
+    """
+    测试过程
+    :param captcha_image_set:验证码图片集合
+    :param captcha_label_set:验证码标签集合
+    :param svm_model:svm模型
+    :return:总正确率，总用时
+    """
     st = time.clock()
     if svm_model == None:
         # 读取模型
@@ -351,60 +451,69 @@ def test_process(captcha_image_set, captcha_label_set, svm_model=None):
 
 
 def get_total_correct_rate(char_correct_vector, pre_correct_rate):
+    """
+    得到总正确率，总正确率 = 预处理正确率 * 验证码预测正确率
+    :param char_correct_vector:字符对错向量
+    :param pre_correct_rate:预处理正确率
+    :return:总正确率
+    """
+    # 通过字符串的对错向量来计算验证码的正确率
     captcha_correct_vector = char_correct_vector.reshape((-1, 4)).min(axis=1)
     captcha_correct_rate = captcha_correct_vector.mean()
+    # 总正确率 = 预处理正确率 * 验证码预测正确率
     total_correct_rate = pre_correct_rate * captcha_correct_rate
     return total_correct_rate
 
 
 def img_preprocess_demo():
+    """
+    演示预处理流程
+    """
     # 产生一个随机验证码图片
     text, image = gen_captcha_text_image()
+    # 图表初始化
     f = plt.figure()
     ax = f.add_subplot(111)
     ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
+    # 图片预处理
     image_preprocess(image)
 
-
-def get_train_data_set(need_create_train_set, train_set_size):
-    if need_create_train_set:
+def get_data_set(need_create_set, train_set_size, img_path, label_path):
+    """
+    获取训练数据集
+    :param need_create_set:是否需要生成创建数据集，若需要，会生成并将训练集存为文件
+    :param train_set_size:数据集大小（当需要生成数据集时使用）
+    :param img_path:用于存储图片集的文件路径
+    :param label_path:用于存储标签集的文件路径
+    :return:验证码图片集合，验证码标签集合
+    """
+    if need_create_set:
         # 创建训练集
-        captcha_image_set, captcha_label_set, time_get_batch = \
-            get_next_batch(batch_size=train_set_size)
-        print("time_get_train_batch: {:.4f}s".format(time_get_batch))
+        captcha_image_set, captcha_label_set, time_gen_data_set = \
+            get_batch(batch_size=train_set_size)
+        print("time_gen_data_set: {:.4f}s".format(time_gen_data_set))
         # 存储训练集
-        joblib.dump(captcha_image_set, "./train_img.data")
-        joblib.dump(captcha_label_set, "./train_label.data")
+        joblib.dump(captcha_image_set, img_path)
+        joblib.dump(captcha_label_set, label_path)
         print("train data set saved successfully!")
     else:
         # 载入训练集
-        captcha_image_set = joblib.load("./train_img.data")
-        captcha_label_set = joblib.load("./train_label.data")
+        captcha_image_set = joblib.load(img_path)
+        captcha_label_set = joblib.load(label_path)
     return captcha_image_set, captcha_label_set
 
-def get_test_data_set(need_create_test_set, test_set_size):
-    if need_create_test_set:
-        # 创建测试集
-        captcha_image_set, captcha_label_set, time_get_batch = \
-            get_next_batch(batch_size=test_set_size)
-        print("time_get_test_batch: {:.4f}s".format(time_get_batch))
-        # 存储测试集
-        joblib.dump(captcha_image_set, "./test_img.data")
-        joblib.dump(captcha_label_set, "./test_label.data")
-        print("test data set saved successfully!")
-    else:
-        # 载入测试集
-        captcha_image_set = joblib.load("./test_img.data")
-        captcha_label_set = joblib.load("./test_label.data")
-    return captcha_image_set, captcha_label_set
-        
-
+# 主函数
 if __name__ == '__main__':
     # 配置功能=============================================================
     conf_need_demo = True
     conf_need_train = True
+    conf_need_test = False
     conf_need_create_train_set = True
     conf_need_create_test_set = True
+    conf_test_img_path = "./train_img.data"
+    conf_test_label_path = "./test_label.data"
+    conf_train_img_path = "./train_img.data"
+    conf_train_label_path = "./train_label.data"
     conf_train_set_size = 2
     conf_test_set_size = 2
 
@@ -417,7 +526,8 @@ if __name__ == '__main__':
     if conf_need_train:
         # 获取训练集
         captcha_image_set, captcha_label_set =\
-            get_train_data_set(conf_need_create_train_set, conf_train_set_size)
+            get_data_set(conf_need_create_train_set, conf_train_set_size,
+                conf_train_img_path, conf_train_label_path)
 
         #开始训练流程
         svm_model, train_correct_rate, train_time = \
@@ -427,12 +537,14 @@ if __name__ == '__main__':
         print("---------------------------------------------------------")
 
     # 测试================================================================
-    # 生成测试集
-    captcha_image_set, captcha_label_set= \
-        get_test_data_set(conf_need_create_test_set, conf_test_set_size)
+    if conf_need_test:
+        # 生成测试集
+        captcha_image_set, captcha_label_set= \
+            get_data_set(conf_need_create_test_set, conf_test_set_size,
+                         conf_test_img_path, conf_test_label_path)
 
-    # 开始测试流程
-    test_correct_rate, test_time = \
-        test_process(captcha_image_set, captcha_label_set, svm_model)
-    print("total test time: {:.4f}s.".format(test_time))
-    print("totoal test correct rate: {:.4f}.".format(test_correct_rate))
+        # 开始测试流程
+        test_correct_rate, test_time = \
+            test_process(captcha_image_set, captcha_label_set, svm_model)
+        print("total test time: {:.4f}s.".format(test_time))
+        print("totoal test correct rate: {:.4f}.".format(test_correct_rate))
