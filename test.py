@@ -426,7 +426,7 @@ def test_process(captcha_image_set, captcha_label_set, svm_model=None):
         st_ld = time.clock()
         svm_model = joblib.load("./svm_captcha.model")
         ed_ld = time.clock()
-        print("time_load_mode: {:.4f}s".format(ed_ld - st_ld))
+        # print("time_load_mode: {:.4f}s".format(ed_ld - st_ld))
 
     # 图像预处理
     char_image_set, char_label_set, pre_correct_rate, time_data_set_preprocess = \
@@ -504,18 +504,19 @@ def get_data_set(need_create_set, train_set_size, img_path, label_path):
 
 # 主函数
 if __name__ == '__main__':
+    program_st = time.clock()
     # 配置功能=============================================================
     conf_need_demo = True
     conf_need_train = True
-    conf_need_test = False
+    conf_need_test = True
     conf_need_create_train_set = True
     conf_need_create_test_set = True
     conf_test_img_path = "./train_img.data"
     conf_test_label_path = "./test_label.data"
     conf_train_img_path = "./train_img.data"
     conf_train_label_path = "./train_label.data"
-    conf_train_set_size = 2
-    conf_test_set_size = 2
+    conf_train_set_size = 1000
+    conf_test_set_size = 1000
 
     # 展示图片预处理========================================================
     if conf_need_demo:
@@ -548,3 +549,7 @@ if __name__ == '__main__':
             test_process(captcha_image_set, captcha_label_set, svm_model)
         print("total test time: {:.4f}s.".format(test_time))
         print("totoal test correct rate: {:.4f}.".format(test_correct_rate))
+
+    program_ed = time.clock()
+    print("---------------------------------------------------------")
+    print("program process time: {:.4f}.".format(program_ed-program_st))
