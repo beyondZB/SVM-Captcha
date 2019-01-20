@@ -180,7 +180,7 @@ def new_try(image):
     return image
 
 
-def vertical(image):
+def vertical_cut(image):
     """传入二值化后的图片进行垂直投影"""
     h,w = image.shape
     # print(h, w)
@@ -195,16 +195,16 @@ def vertical(image):
     # print(ver_list)
     # 判断边界
     l,r = 0,0
-    flag = False
+    flag_new_cut = False
     cuts = []
     for i,count in enumerate(ver_list):
         # 阈值这里为0
-        if flag is False and count > 0:
+        if flag_new_cut is False and count > 0:
             l = i
-            flag = True
-        if flag and count == 0:
+            flag_new_cut = True
+        if flag_new_cut and count == 0:
             r = i-1
-            flag = False
+            flag_new_cut = False
             cuts.append((l,r))
     return cuts
 
@@ -212,21 +212,6 @@ def vertical(image):
 def do_vertical_split(image, cut):
     split_image = []
     for (l,r) in cut:
-        # if (r - l) >= 27:
-        #     # split_image.append(image[:, l:(l+r)//2])
-        #     # split_image.append(image[:, (l+r)//2 + 1:r])
-        #     split_image.extend(DropFall.drop_fall(image[:, l:r]))
-        #     # [first_img, second_img] = DropFall.drop_fall(image[:, l:r])
-        #     # first_img_h, first_img_w = first_img.shape
-        #     # second_img_h, second_img_w = second_img.shape
-        #     # if first_img_w >= 30:
-        #     #     print("cut_first")
-        #     #     split_image.extend(DropFall.drop_fall(first_img))
-        #     # if second_img_w >=30:
-        #     #     print("cut_second")
-        #     #     split_image.extend(DropFall.drop_fall(second_img))
-        # else:
-        #     split_image.append(image[:, l:r])
         split_image.append(image[:, l:r])
     return split_image
 
@@ -241,6 +226,39 @@ def remove_point(cut):
         i += 1
     return cut
 
+def image_preprocess_demo(image):
+    show_image(image)
+
+    image = convert_grey(image)
+    show_image(image, True)
+
+    image = convert_bin(image)
+    show_image(image, True)
+
+    image = depoint(image)
+    show_image(image, True)
+
+    image = depoint(image)
+    show_image(image, True)
+
+    image = depoint(image)
+    show_image(image, True)
+
+    cut = vertical_cut(image)
+    # print(cut)
+
+    remove_point(cut)
+    # print(cut)
+    error_flag = False
+    if len(cut) != 4:
+        error_flag = True
+        return np.zeros([60,20,4]), error_flag
+
+    s_image = do_vertical_split(image, cut)
+    for im in s_image:
+        print(im.shape)
+        show_image(im, True)
+    return s_image, error_flag
 
 def image_preprocess(image):
     # show_image(image)
@@ -263,7 +281,7 @@ def image_preprocess(image):
     image = depoint(image)
     # show_image(image, True)
 
-    cut = vertical(image)
+    cut = vertical_cut(image)
     # print(cut)
 
     remove_point(cut)
@@ -446,11 +464,12 @@ def get_total_correct_rate(char_correct_vector, pre_correct_rate):
 
 
 def img_preprocess_demo():
+    # 产生一个随机验证码图片
     text, image = gen_captcha_text_image()
     f = plt.figure()
     ax = f.add_subplot(111)
     ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
-    image_preprocess(image)
+    image_preprocess_demo(image)
 
 
 def get_train_data_set(need_create_train_set, train_set_size):
