@@ -59,9 +59,9 @@ def gen_captcha_text_image():
 
 
 def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha=4, char_set_len=10):
+    st = time.clock()
     batch_x=np.zeros([batch_size,image_height,image_width,3])
     batch_y=np.zeros([batch_size,4])
-
     def wrap_gen_captcha_text_and_image():
         while True:
             text, image = gen_captcha_text_image()
@@ -77,8 +77,8 @@ def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha
         batch_x[i, :] = image
         # batch_y[i, :] = text2vec(text)
         batch_y[i, :] = list(text)
-
-    return batch_x, batch_y
+    ed = time.clock()
+    return batch_x, batch_y, ed - st
 
 
 def show_image(image, grey=False):
@@ -331,6 +331,7 @@ def main():
 
 
 def data_set_preprocess(captcha_image_set, train_captcha_label_set):
+    st = time.clock()
     character_image_set = []
     character_label_set = []
     pre_error_count = 0
@@ -341,11 +342,14 @@ def data_set_preprocess(captcha_image_set, train_captcha_label_set):
             character_label_set.extend(train_captcha_label_set[i])
         else:
             pre_error_count += 1
-    print("!!!!!!!!!!!!!!!!!pre_error_count: ", pre_error_count)
-    return character_image_set, np.array(character_label_set)
+    # print("!!!!!!!!!!!!!!!!!pre_error_count: ", pre_error_count)
+    pre_correct_rate = 1 - pre_error_count / len(captcha_image_set)
+    ed = time.clock()
+    return character_image_set, np.array(character_label_set), pre_correct_rate, ed - st
 
 
 def get_feature_vector(char_img_set, uniform_width=20):
+    st = time.clock()
     vector_set = []
     for char_img in char_img_set:
         height, width = char_img.shape
@@ -365,12 +369,15 @@ def get_feature_vector(char_img_set, uniform_width=20):
             vector.append(uniform_count_blk_pos)
             vector.append(uniform_avg_blk_pos)
         vector_set.append(vector)
-    return np.array(vector_set)
+    ed = time.clock()
+    return np.array(vector_set), ed - st
 
 
 def train(train_set_size = 15000):
+    st = time.clock()
     # 训练
-    captcha_image_set, captcha_label_set = get_next_batch(batch_size=train_set_size)
+    captcha_image_set, captcha_label_set, time_get_batch = \
+        get_next_batch(batch_size=train_set_size)
     captcha_image_set = np.uint8(captcha_image_set)
     # print(captcha_image_set[0])
     # show_image(np.uint8(captcha_image_set[0]))
@@ -379,34 +386,54 @@ def train(train_set_size = 15000):
     # captcha_label_set = captcha_label_set.flatten()
     # print(captcha_label_set)
     # 图像预处理
-    char_img_set, char_label_set = \
+    char_img_set, char_label_set, pre_correct_rate, time_data_set_preprocess = \
         data_set_preprocess(captcha_image_set, captcha_label_set)
     # 提取特征
-    feature_vector = get_feature_vector(char_img_set)
+    feature_vector, time_get_feature_vector = \
+        get_feature_vector(char_img_set)
     # 训练
     print(feature_vector.shape, char_label_set.shape)
     print(char_label_set)
-    svm_model, train_time = train_svm(feature_vector, char_label_set)
-    return svm_model, train_time
+    svm_model, time_train = train_svm(feature_vector, char_label_set)
+    ed = time.clock()
+    time_total_train = ed - st
+    print("pre_correct_rate: {:.4f}".format(pre_correct_rate))
+    print("time_get_batch: {:.4f}s".format(time_get_batch))
+    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
+    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
+    print("time_train: {:.4f}s".format(time_train))
+    return svm_model, pre_correct_rate, time_total_train
 
 
 def test(svm_model, test_set_size=2500):
+    st = time.clock()
     # 测试
-    captcha_image_set, captcha_label_set = get_next_batch(batch_size=test_set_size)
+    captcha_image_set, captcha_label_set, time_get_batch = \
+        get_next_batch(batch_size=test_set_size)
     captcha_image_set = np.uint8(captcha_image_set)
     # 图像预处理
-    char_image_set, char_label_set = \
+    char_image_set, char_label_set, pre_correct_rate, time_data_set_preprocess = \
         data_set_preprocess(captcha_image_set, captcha_label_set)
     # 提取特征
-    feature_vector = get_feature_vector(char_image_set)
+    feature_vector, time_get_feature_vector = \
+        get_feature_vector(char_image_set)
     # 测试
     print(feature_vector.shape, char_label_set.shape)
     print(char_label_set)
-    char_correct_rate, char_correct_vector, test_time = test_svm(svm_model, feature_vector, char_label_set)
+    char_correct_rate, char_correct_vector, time_test = \
+        test_svm(svm_model, feature_vector, char_label_set)
     captcha_correct_vector = char_correct_vector.reshape((-1, 4)).min(axis=1)
-    print("test mean captcha_correct_vector len: ", len(captcha_correct_vector))
     captcha_correct_rate = captcha_correct_vector.mean()
-    return captcha_correct_rate, test_time
+    total_correct_rate = pre_correct_rate * captcha_correct_rate
+    ed = time.clock()
+    time_total_test = ed - st
+    print("test mean captcha_correct_vector len: ", len(captcha_correct_vector))
+    print("pre_correct_rate:{:.4f}".format(pre_correct_rate))
+    print("time_get_batch: {:.4f}s".format(time_get_batch))
+    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
+    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
+    print("time_test: {:.4f}s".format(time_test))
+    return total_correct_rate, time_total_test
 
 
 def img_preprocess_demo():
@@ -422,11 +449,11 @@ if __name__ == '__main__':
     img_preprocess_demo()
 
     # 训练
-    svm_model, train_time = train()
-    print("training time: {:.4f}s.".format(train_time))
+    svm_model, pre_correct_rate, train_time = train()
+    print("total training time: {:.4f}s.".format(train_time))
     print("---------------------------------------------------------")
 
     # 测试
     correct_rate, test_time = test(svm_model)
-    print("test time: {:.4f}s.".format(test_time))
+    print("total test time: {:.4f}s.".format(test_time))
     print("correct_rate: {}.".format(correct_rate))
