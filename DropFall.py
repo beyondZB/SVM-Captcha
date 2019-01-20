@@ -1,3 +1,4 @@
+# 水滴算法，用于切割黏连字符
 from itertools import groupby
 from PIL import Image
 import numpy as np

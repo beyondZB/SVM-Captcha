@@ -4,10 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image, ImageEnhance, ImageFilter
 import random
-import DropFall
 from sklearn import svm
 from sklearn.externals import joblib
-import mnist_unpack
 
 number=['0','1','2','3','4','5','6','7','8','9']
 #alphabet = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']
@@ -27,36 +25,8 @@ def gen_captcha_text_image():
     captcha_text=random_captcha_text()
     captcha_text=''.join(captcha_text)
     captcha_image=image.generate_image(captcha_text)
-    # print(captcha_image)
-    # captcha_image = captcha_image.convert('L')
     captcha_image=np.array(captcha_image)
     return captcha_text,captcha_image
-
-
-# def text2vec(text, max_captcha=4, char_set_len=10):
-#     text_len = len(text)
-#     if text_len > max_captcha:
-#         raise ValueError('验证码最长4个字符')
-#
-#     vector = np.zeros(max_captcha * char_set_len)
-#
-#     def char2pos(c):
-#         if c == '_':
-#             k = 62
-#             return k
-#         k = ord(c) - 48
-#         if k > 9:
-#             k = ord(c) - 55
-#             if k > 35:
-#                 k = ord(c) - 61
-#                 if k > 61:
-#                     raise ValueError('No Map')
-#         return k
-#
-#     for i, c in enumerate(text):
-#         idx = i * char_set_len + char2pos(c)
-#         vector[idx] = 1
-#     return vector
 
 
 def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha=4, char_set_len=10):
@@ -66,7 +36,6 @@ def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha
     def wrap_gen_captcha_text_and_image():
         while True:
             text, image = gen_captcha_text_image()
-            # image = np.uint8(image)
             if image.shape == (60, 160, 3):
                 return text, image
             else:
@@ -74,17 +43,13 @@ def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha
 
     for i in range(batch_size):
         text, image = wrap_gen_captcha_text_and_image()
-        # image = convert_grey(image)
         batch_x[i, :] = image
-        # batch_y[i, :] = text2vec(text)
         batch_y[i, :] = list(text)
     ed = time.clock()
     return np.uint8(batch_x), batch_y, ed - st
 
 
 def show_image(image, grey=False):
-    # print(image.shape)
-    # print(image)
     if grey:
         plt.imshow(image, cmap='gray')
     else:
@@ -92,13 +57,16 @@ def show_image(image, grey=False):
     plt.show()
 
 
-def convert_grey(image):
+def convert_grey(image, flag_show=False):
+    # 灰度化
     iimage = Image.fromarray(np.uint8(image))
-    # iimage = iimage.filter(ImageFilter.MedianFilter())
+    # 锐化，很重要，强化边界，使得噪点更容易去除
     iimage = ImageEnhance.Sharpness(iimage).enhance(4)
     # iimage = ImageEnhance.Contrast(iimage).enhance(1)
     iimage = iimage.convert('L')
     image = np.array(iimage)
+    if flag_show:
+        show_image(image, True)
     return image
 
 
@@ -131,7 +99,7 @@ def get_pixel_around(image, pi, pj):
     return window
 
 
-def convert_bin(image):
+def convert_bin(image, flag_show=False):
     width, height = image.shape
     old_threshold = 0
     new_threshold = 220
@@ -139,7 +107,7 @@ def convert_bin(image):
     over_threshold_sum = 0
     under_threshold_count = 0
     under_threshold_sum = 0
-
+    # 找到合适的阈值
     while old_threshold != new_threshold:
         old_threshold = new_threshold
         for i in range(width):
@@ -154,12 +122,13 @@ def convert_bin(image):
         avg_ot = over_threshold_sum / over_threshold_count
         avg_ut = under_threshold_sum/ under_threshold_count
         new_threshold = (avg_ot + avg_ut) // 2
-        # print(old_threshold, under_threshold_count, over_threshold_count, new_threshold)
 
+    if flag_show:
+        show_image(image, True)
     return np.where(image < new_threshold, 0, 255)
 
 
-def depoint(image):
+def depoint(image, flag_show=False):
     """传入二值化后的图片进行降噪"""
     h, w = image.shape
     new_image = np.zeros((w,h))
@@ -170,8 +139,10 @@ def depoint(image):
                 image[j,i] = 255
             if (j in (0, w -1) or i in (0, w - 1)) and count > 2:
                 image[j,i] = 255
-
+    if flag_show:
+        show_image(image, True)
     return image
+
 
 def new_try(image):
     iimage = Image.fromarray(image)
@@ -209,10 +180,12 @@ def vertical_cut(image):
     return cuts
 
 
-def do_vertical_split(image, cut):
+def do_vertical_split(image, cut, flag_show=False):
     split_image = []
     for (l,r) in cut:
         split_image.append(image[:, l:r])
+        if flag_show:
+            show_image(image[:, l:r], True)
     return split_image
 
 
@@ -226,89 +199,30 @@ def remove_point(cut):
         i += 1
     return cut
 
-def image_preprocess_demo(image):
-    show_image(image)
 
-    image = convert_grey(image)
-    show_image(image, True)
-
-    image = convert_bin(image)
-    show_image(image, True)
-
-    image = depoint(image)
-    show_image(image, True)
-
-    image = depoint(image)
-    show_image(image, True)
-
-    image = depoint(image)
-    show_image(image, True)
-
+def image_preprocess(image, flag_show=False):
+    if flag_show:
+        show_image(image)
+    # 转灰度图
+    image = convert_grey(image, flag_show)
+    # 二值化
+    image = convert_bin(image, flag_show)
+    # 去燥
+    image = depoint(image, flag_show)
+    image = depoint(image, flag_show)
+    image = depoint(image, flag_show)
+    # 找出切割边界
     cut = vertical_cut(image)
-    # print(cut)
-
+    # 去除切割出来的噪点
     remove_point(cut)
-    # print(cut)
+    # 判断是否切割成功，若切割出图片不等于4，则预处理失败，直接抛弃这条数据
     error_flag = False
     if len(cut) != 4:
         error_flag = True
         return np.zeros([60,20,4]), error_flag
-
-    s_image = do_vertical_split(image, cut)
-    for im in s_image:
-        print(im.shape)
-        show_image(im, True)
+    # 实施切割
+    s_image = do_vertical_split(image, cut, flag_show)
     return s_image, error_flag
-
-def image_preprocess(image):
-    # show_image(image)
-
-    image = convert_grey(image)
-    # show_image(image, True)
-
-    # image = new_try(image)
-    # show_image(image, True)
-
-    image = convert_bin(image)
-    # show_image(image, True)
-
-    image = depoint(image)
-    # show_image(image, True)
-
-    image = depoint(image)
-    # show_image(image, True)
-
-    image = depoint(image)
-    # show_image(image, True)
-
-    cut = vertical_cut(image)
-    # print(cut)
-
-    remove_point(cut)
-    # print(cut)
-    error_flag = False
-    if len(cut) != 4:
-        error_flag = True
-        return np.zeros([60,20,4]), error_flag
-
-    s_image = do_vertical_split(image, cut)
-    # print("=========")
-    # for im in s_image:
-    #     print(im.shape)
-    #     show_image(im, True)
-
-    # # ii = Image.fromarray(np.uint8(image))
-    # contours, hierarchy = cv2.findContours(cv2.Umat(image), cv2.RETR_TREE, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    # # show_image(ii, True)
-    return s_image, error_flag
-
-
-# 读取训练数据
-def read_all_data(path, kind='train'):
-    if kind == 'train':
-        return mnist_unpack.mnist_unpack(path)
-    else:
-        return mnist_unpack.mnist_unpack(path, 't10k')
 
 
 def train_svm(images, labels, decision='ovr'):
@@ -326,26 +240,6 @@ def test_svm(clf, images, labels):
     correct = np.equal(labels, pre_result)
     correct_rate = np.mean(correct)
     return correct_rate, correct, et - st
-
-
-# 对10个数字进行分类测试
-def main():
-    data_path = \
-        'E:\Workspace\Python\machine-learning\machine-learning\svm\digit_handwritten_recognition\MNIST_28x28'
-    # train=========================================================
-    train_images, train_labels = read_all_data(data_path, 'train')
-    r_train_images = np.round(train_images / 255)  # 对灰度值进行归一化
-    print("training...")
-    svm_model, train_time = train_svm(r_train_images, train_labels)
-    print("training time: {:.4f}s.".format(train_time))
-    print("---------------------------------------------------------")
-    # test==========================================================
-    test_images, test_labels = read_all_data(data_path, 'test')
-    r_test_images = np.round(test_images / 255)  # 对灰度值进行归一化
-    print("testing...")
-    correct_rate, test_time = test_svm(svm_model, r_test_images, test_labels)
-    print("test time: {:.4f}s.".format(test_time))
-    print("correct_rate: {}.".format(correct_rate))
 
 
 def data_set_preprocess(captcha_image_set, train_captcha_label_set):
@@ -469,7 +363,7 @@ def img_preprocess_demo():
     f = plt.figure()
     ax = f.add_subplot(111)
     ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
-    image_preprocess_demo(image)
+    image_preprocess(image)
 
 
 def get_train_data_set(need_create_train_set, train_set_size):
