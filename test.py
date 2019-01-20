@@ -6,6 +6,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 import random
 import DropFall
 from sklearn import svm
+from sklearn.externals import joblib
 import mnist_unpack
 
 number=['0','1','2','3','4','5','6','7','8','9']
@@ -78,7 +79,7 @@ def get_next_batch(batch_size=128, image_height=60, image_width=160, max_captcha
         # batch_y[i, :] = text2vec(text)
         batch_y[i, :] = list(text)
     ed = time.clock()
-    return batch_x, batch_y, ed - st
+    return np.uint8(batch_x), batch_y, ed - st
 
 
 def show_image(image, grey=False):
@@ -305,7 +306,6 @@ def test_svm(clf, images, labels):
     pre_result = clf.predict(np.uint8(images))
     et = time.clock()
     correct = np.equal(labels, pre_result)
-    print("test_svm mean corret len: ", len(correct))
     correct_rate = np.mean(correct)
     return correct_rate, correct, et - st
 
@@ -373,67 +373,76 @@ def get_feature_vector(char_img_set, uniform_width=20):
     return np.array(vector_set), ed - st
 
 
-def train(train_set_size = 15000):
+def train_process(captcha_image_set, captcha_label_set):
     st = time.clock()
-    # 训练
-    captcha_image_set, captcha_label_set, time_get_batch = \
-        get_next_batch(batch_size=train_set_size)
-    captcha_image_set = np.uint8(captcha_image_set)
-    # print(captcha_image_set[0])
-    # show_image(np.uint8(captcha_image_set[0]))
-    # print(captcha_image_set)
-    # print(captcha_label_set)
-    # captcha_label_set = captcha_label_set.flatten()
-    # print(captcha_label_set)
+
     # 图像预处理
     char_img_set, char_label_set, pre_correct_rate, time_data_set_preprocess = \
         data_set_preprocess(captcha_image_set, captcha_label_set)
+    print("pre_correct_rate: {:.4f}".format(pre_correct_rate))
+    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
+
     # 提取特征
     feature_vector, time_get_feature_vector = \
         get_feature_vector(char_img_set)
+    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
+
     # 训练
-    print(feature_vector.shape, char_label_set.shape)
-    print(char_label_set)
     svm_model, time_train = train_svm(feature_vector, char_label_set)
+
+    # 在训练集上测试
+    char_correct_rate, char_correct_vector, time_test = \
+        test_svm(svm_model, feature_vector, char_label_set)
+    total_correct_rate = get_total_correct_rate(char_correct_vector, pre_correct_rate)
+    print("char_correct_rate:{:.4f}".format(char_correct_rate))
+    print("time_test: {:.4f}s".format(time_test))
+
+    # 存储模型
+    joblib.dump(svm_model, "./svm_captcha.model")
+    print("model saved successfully!")
+
     ed = time.clock()
     time_total_train = ed - st
-    print("pre_correct_rate: {:.4f}".format(pre_correct_rate))
-    print("time_get_batch: {:.4f}s".format(time_get_batch))
-    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
-    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
     print("time_train: {:.4f}s".format(time_train))
-    return svm_model, pre_correct_rate, time_total_train
+    return svm_model, total_correct_rate, time_total_train
 
 
-def test(svm_model, test_set_size=2500):
+def test_process(captcha_image_set, captcha_label_set, svm_model=None):
     st = time.clock()
-    # 测试
-    captcha_image_set, captcha_label_set, time_get_batch = \
-        get_next_batch(batch_size=test_set_size)
-    captcha_image_set = np.uint8(captcha_image_set)
+    if svm_model == None:
+        # 读取模型
+        st_ld = time.clock()
+        svm_model = joblib.load("./svm_captcha.model")
+        ed_ld = time.clock()
+        print("time_load_mode: {:.4f}s".format(ed_ld - st_ld))
+
     # 图像预处理
     char_image_set, char_label_set, pre_correct_rate, time_data_set_preprocess = \
         data_set_preprocess(captcha_image_set, captcha_label_set)
+    print("pre_correct_rate:{:.4f}".format(pre_correct_rate))
+    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
+
     # 提取特征
     feature_vector, time_get_feature_vector = \
         get_feature_vector(char_image_set)
+    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
+
     # 测试
-    print(feature_vector.shape, char_label_set.shape)
-    print(char_label_set)
     char_correct_rate, char_correct_vector, time_test = \
         test_svm(svm_model, feature_vector, char_label_set)
+    total_correct_rate = get_total_correct_rate(char_correct_vector, pre_correct_rate)
+    print("char_correct_rate:{:.4f}".format(char_correct_rate))
+    print("time_test: {:.4f}s".format(time_test))
+    ed = time.clock()
+    time_total_test = ed - st
+    return total_correct_rate, time_total_test
+
+
+def get_total_correct_rate(char_correct_vector, pre_correct_rate):
     captcha_correct_vector = char_correct_vector.reshape((-1, 4)).min(axis=1)
     captcha_correct_rate = captcha_correct_vector.mean()
     total_correct_rate = pre_correct_rate * captcha_correct_rate
-    ed = time.clock()
-    time_total_test = ed - st
-    print("test mean captcha_correct_vector len: ", len(captcha_correct_vector))
-    print("pre_correct_rate:{:.4f}".format(pre_correct_rate))
-    print("time_get_batch: {:.4f}s".format(time_get_batch))
-    print("time_data_set_preprocess: {:.4f}s".format(time_data_set_preprocess))
-    print("time_get_feature_vector: {:.4f}s".format(time_get_feature_vector))
-    print("time_test: {:.4f}s".format(time_test))
-    return total_correct_rate, time_total_test
+    return total_correct_rate
 
 
 def img_preprocess_demo():
@@ -444,16 +453,73 @@ def img_preprocess_demo():
     image_preprocess(image)
 
 
+def get_train_data_set(need_create_train_set, train_set_size):
+    if need_create_train_set:
+        # 创建训练集
+        captcha_image_set, captcha_label_set, time_get_batch = \
+            get_next_batch(batch_size=train_set_size)
+        print("time_get_train_batch: {:.4f}s".format(time_get_batch))
+        # 存储训练集
+        joblib.dump(captcha_image_set, "./train_img.data")
+        joblib.dump(captcha_label_set, "./train_label.data")
+        print("train data set saved successfully!")
+    else:
+        # 载入训练集
+        captcha_image_set = joblib.load("./train_img.data")
+        captcha_label_set = joblib.load("./train_label.data")
+    return captcha_image_set, captcha_label_set
+
+def get_test_data_set(need_create_test_set, test_set_size):
+    if need_create_test_set:
+        # 创建测试集
+        captcha_image_set, captcha_label_set, time_get_batch = \
+            get_next_batch(batch_size=test_set_size)
+        print("time_get_test_batch: {:.4f}s".format(time_get_batch))
+        # 存储测试集
+        joblib.dump(captcha_image_set, "./test_img.data")
+        joblib.dump(captcha_label_set, "./test_label.data")
+        print("test data set saved successfully!")
+    else:
+        # 载入测试集
+        captcha_image_set = joblib.load("./test_img.data")
+        captcha_label_set = joblib.load("./test_label.data")
+    return captcha_image_set, captcha_label_set
+        
+
 if __name__ == '__main__':
-    # 展示图片预处理
-    img_preprocess_demo()
+    # 配置功能=============================================================
+    conf_need_demo = True
+    conf_need_train = True
+    conf_need_create_train_set = True
+    conf_need_create_test_set = True
+    conf_train_set_size = 2
+    conf_test_set_size = 2
 
-    # 训练
-    svm_model, pre_correct_rate, train_time = train()
-    print("total training time: {:.4f}s.".format(train_time))
-    print("---------------------------------------------------------")
+    # 展示图片预处理========================================================
+    if conf_need_demo:
+        img_preprocess_demo()
 
-    # 测试
-    correct_rate, test_time = test(svm_model)
+    # 训练================================================================
+    svm_model = None
+    if conf_need_train:
+        # 获取训练集
+        captcha_image_set, captcha_label_set =\
+            get_train_data_set(conf_need_create_train_set, conf_train_set_size)
+
+        #开始训练流程
+        svm_model, train_correct_rate, train_time = \
+            train_process(captcha_image_set, captcha_label_set)
+        print("total training time: {:.4f}s.".format(train_time))
+        print("totoal train correct rate: {:.4f}.".format(train_correct_rate))
+        print("---------------------------------------------------------")
+
+    # 测试================================================================
+    # 生成测试集
+    captcha_image_set, captcha_label_set= \
+        get_test_data_set(conf_need_create_test_set, conf_test_set_size)
+
+    # 开始测试流程
+    test_correct_rate, test_time = \
+        test_process(captcha_image_set, captcha_label_set, svm_model)
     print("total test time: {:.4f}s.".format(test_time))
-    print("correct_rate: {}.".format(correct_rate))
+    print("totoal test correct rate: {:.4f}.".format(test_correct_rate))
