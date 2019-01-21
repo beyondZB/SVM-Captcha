@@ -476,7 +476,7 @@ def img_preprocess_demo():
     ax = f.add_subplot(111)
     ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
     # 图片预处理
-    image_preprocess(image)
+    image_preprocess(image, True)
 
 def get_data_set(need_create_set, train_set_size, img_path, label_path):
     """
@@ -515,7 +515,7 @@ if __name__ == '__main__':
     conf_test_label_path = "./test_label.data"
     conf_train_img_path = "./train_img.data"
     conf_train_label_path = "./train_label.data"
-    conf_train_set_size = 1000
+    conf_train_set_size = 10000
     conf_test_set_size = 1000
 
     # 展示图片预处理========================================================
@@ -552,4 +552,4 @@ if __name__ == '__main__':
 
     program_ed = time.clock()
     print("---------------------------------------------------------")
-    print("program process time: {:.4f}.".format(program_ed-program_st))
+    print("program process time: {:.4f}s.".format(program_ed-program_st))
