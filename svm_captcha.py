@@ -353,20 +353,27 @@ def get_feature_vector(char_img_set, uniform_width=20):
     for char_img in char_img_set:
         height, width = char_img.shape
         vector = []
+        #对每一行提取特征
         for row in char_img:
+            # black_pos 获取row中为零的所有元素的行索引（横坐标）
             black_pos = np.where(row == 0)[0]
             count_blk_pos = len(black_pos)
+            # uniform_count_blk_pos 归一化宽度的，行黑色像素点数量
             uniform_count_blk_pos = count_blk_pos * uniform_width // width
             avg_blk_pos = 0
             uniform_avg_blk_pos = 0
             # print("get_feature_vector black_pos mean lean: ", count_blk_pos)
-            if count_blk_pos!= 0:
+            if count_blk_pos != 0:
+                # 行中黑色像素点横坐标的平均值
                 avg_blk_pos = np.mean(black_pos)
+                # 归一化之后的行黑色像素点平均值
                 uniform_avg_blk_pos = avg_blk_pos * uniform_width // width
             # print(uniform_count_blk_pos)
             # print(uniform_avg_blk_pos)
+            # 将uniform_count_blk_pos与uniform_avg_blk_pos打包成一个向量
             vector.append(uniform_count_blk_pos)
             vector.append(uniform_avg_blk_pos)
+        #由所有行的特征向量构成整张图片的特征向量
         vector_set.append(vector)
     ed = time.clock()
     return np.array(vector_set), ed - st
@@ -477,6 +484,7 @@ def img_preprocess_demo():
     ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
     # 图片预处理
     image_preprocess(image, True)
+
 
 def get_data_set(need_create_set, train_set_size, img_path, label_path):
     """
